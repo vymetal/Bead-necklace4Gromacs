@@ -1,0 +1,39 @@
+define          = 
+
+integrator      = sd
+dt              = 0.020 ; ps
+nsteps          = 100000000  ;  steps  
+comm-mode       = Linear
+nstcomm         = 100   ; steps
+nstxout         = 1000  ; steps
+nstxout-compressed = 0
+compressed-x-grps = system
+
+
+nstcalcenergy   = 100   ; steps
+nstenergy       = 100  ; steps
+
+cutoff-scheme   = group
+nstlist         = 10    ; steps
+ns-type         = grid
+pbc             = xyz
+
+rlist           = 1.9
+coulombtype     = user
+coulomb-modifier=None
+rcoulomb       = 1.9  ; nm
+vdwtype         = Cut-off
+vdw-modifier    = Potential-shift
+rvdw            = 1.9; nm
+DispCorr        = No
+
+
+tcoupl          = No;v-rescale
+tc-grps         = System     
+tau-t           = 20.0    ;0.1    ; ps
+ref-t           = 300    ; K
+
+pcoupl          = No
+
+gen-vel         = yes
+gen-temp        = 300

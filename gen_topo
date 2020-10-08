@@ -1,0 +1,123 @@
+#!/usr/bin/python
+
+"""
+This script generates GROMACS topologies for simulation of intrinsically disordered proteins using the coarse-grained Bead-necklace model.
+
+This code creates "topol.top" file required by GROMACS for running molecular dynamics simulations.
+
+This script requires to set the protein sequence (variable "seq") in a standart one-letter amino acid code.
+
+Please note, that the charged protein termini are represented by independent beads and can be indicated in the sequence by "+" (N-terminal) and "-" (C-terminal) symbols.
+
+Additionally, this script can handle some explicit ions, which must be also involved in the provided sequence.
+Calcium and chloride can be added by "3" and "1" symbols, respectively.
+
+This script scales (10x) the default Lennard-Jones potential to mimic hydrophobic interaction between valine, leucine, phenylalanine, tyrosine, isoleucine and tryptophan.
+To switch-off this feature, please set fH variable to 1, as described in the comments bellow.
+
+If you use Bead-necklace model, you should cite the original work: 
+
+[1] Cragnell, C.; Durand, D.; Cabane, B.; Skepö, M. Coarse-grained modeling of the intrinsically
+disordered protein Histatin 5 in solution: Monte Carlo simulations in combination with SAXS.
+Proteins. 2016, 84(6), 777-91. doi: 10.1002/prot.25025
+
+[2] Cragnell, C.; Rieloff, E.; Skepö M. Utilizing Coarse-Grained Modeling and Monte Carlo Simulations
+to Evaluate the Conformational Ensemble of Intrinsically Disordered Proteins and Regions.
+J Mol Biol. 2018, 430(16), 2478-2492. doi: 10.1016/j.jmb.2018.03.006
+
+This particular port of Bead-necklace for GROMACS was described in the publication: 
+
+[3] Zouharova, M.; Vymetal, J.; Bednarova, L.; Vanek, O.; Herman,P.; Vetyskova, V.; Postulkova, K.;
+Lingstaadas, P.S.; Vondrasek, J.; Bousova, K. IDP domain of human Ameloblastin in synthetic fusion 
+with Calmodulin increases Calmodulin stability and modulates its function.
+TBA
+"""
+
+#example sequence, change it to your sequence
+seq='+GMADQLTEEQIAEFKEAFSLFDKDGDGTITTKELGTVMRSLGQNPTEAELQDMINEVDADGNGTIDFPEFLTMMARKMKDTDSEEEIREAFRVFDKDGNGYISAAELRHVMTNLGEKLTDEEVDEMIREADIDGDGQVNYEEFVQMMTAK'
+seq+='GGGGSS'
+seq+='LISHGPMPQNKQSPLYPGMLYVPFGANQLNAPARLGIMSSEEVAGGREDPMAYGAMFPGFGGMRPGFEGMPHNPAMGGDFTLEFDSPVAATKGPENEEGGAQGSPMPEANPDNLENPAFLTELEPAPHAGLLALPKDDIPGLPRSPSGKMKGLPSVTPAAADPLMTPELADVYRTYDADMTTSVDFQEEATMDTTMAPNSLQTSMPGNKAQEPEMMHDAWHFQEP-'
+seq+='3333'  
+
+fH=10.0  #scaling of hydrophobic interactions, to get rid of it set this value to 1.
+#fH=1   #standard bead-necklace model of Cragnell et al
+
+
+######################################################################
+
+resnames={'A':'ALA','C':'CYS','D':'ASP','E': 'GLU', 'F':'PHE',
+          'G':'GLY','H':'HIS','I':'ILE','K': 'LYS', 'L':'LEU',
+          'M':'MET','N':'ASN','P':'PRO','R': 'ARG', 'Q':'GLN',
+          'S':'SER','T':'THR','V':'VAL','Y': 'TYR', 'W':'TRP',
+          '+':'NTR','-':'CTR','3':' CA','1':' CL'}
+
+charges={'D':-1,'E':-1,'K':1,'R':1,'+':1,'-':-1,'3':2,'1':-1}
+types={}
+for i in resnames: types[i]='X'  #default residue
+for i in 'VLFYIW': types[i]='Y'  #hydrophobic residues
+for i in '31':     types[i]='Z'  #explicit ions
+
+#values of Lennard-Jones coeficients
+C6=6e-3  
+C12=2.8e-5      #1.2288e-5  * 2.5 our optimized value
+
+fI=1.0   #scaling of ions, not currently explored
+
+#some conversion for debugging
+#sigma=(C12/C6)**(1.0/6)
+#epsilon=C6/(4*sigma**6)
+#rmin=sigma*2**(1.0/6)
+#print ('eps:%f sigma:%f rmin:%f'%(epsilon,sigma,rmin))
+
+out=open('topol.top','w')
+#header
+out.write('[ defaults ]\n')
+out.write('; nbfunc        comb-rule       gen-pairs       fudgeLJ fudgeQQ\n')
+out.write('  1             1               no              1.0     1.0\n\n')
+
+#atomtypes
+out.write('[ atomtypes ]\n')
+out.write(';name  at.num   mass      charge  ptype       c6           c12\n')
+out.write('    X    6      50.000      0.000     A  %g       %g\n'%(C6,C12) )
+out.write('    Y    6      50.000      0.000     A  %g       %g\n'%(fH*C6,fH*C12) )
+out.write('    Z    6      50.000      0.000     A  %g       %g\n\n'%(C6,C12) )
+
+#listed combinations of nonbonded parameters
+out.write('[ nonbond_params ]\n')
+out.write(';       i       j       func    c6      c12\n')
+out.write('        X       Y        1      %g         %g\n'%(C6,C12) )
+out.write('        X       Z        1      %g         %g\n'%(fI*C6,fI*C12) )
+out.write('        Y       Z        1      %g         %g\n\n'%(C6,C12) )
+
+#bond types
+out.write('[ bondtypes ]\n')
+out.write('; i    j  func       b0          kb\n')
+out.write('  X  X          1     0.41   240.0 \n')
+out.write('  X  Y          1     0.41   240.0 \n')
+out.write('  Y  Y          1     0.41   240.0 \n\n')
+
+#the actual topology of the molecule(s)
+out.write('[ moleculetype ]\n')
+out.write('; Name            nrexcl\n')
+out.write('Protein             0\n\n')
+out.write('[ atoms ]\n')
+out.write(';   nr       type  resnr residue  atom   cgnr     charge       mass  \n')
+for ii,a in enumerate(seq):
+   ch=0
+   if a in charges: ch=charges[a]
+   out.write('     %i         %s      %i    %s      CA      %i     %f\n'%(ii+1,types[a],ii+1,resnames[a],ii+1,ch)  )
+out.write('\n[ bonds ]\n')
+out.write(';  ai    aj funct\n')
+for ii in range(len(seq)-1):
+  if (seq[ii] not in ['3','1'])and(seq[ii+1] not in ['3','1']):   # calcium or chloride ions
+          out.write('    %i     %i     1\n'%(ii+1,ii+2))
+out.write('\n')
+#
+out.write('[ system ]\n')
+out.write('; Name\n')
+out.write(' Coarse-Grained Protein\n\n')
+out.write('[ molecules ]\n')
+out.write('; Compound        #mols\n')
+out.write('Protein             1\n\n')
+out.close()
+

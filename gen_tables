@@ -1,0 +1,62 @@
+#!/usr/bin/python
+import math
+
+"""
+This simple utility generates tabulated potential ("table.xvg" file) for GROMACS.
+It is intended for use with Bead-necklase model for instrinsically disordered proteins,
+where the electrostatic interaction is treated by Debye-Hueckel screening model.
+
+Change the  molar ionic strength (it is equal to concentration for a salt with monovalent
+ ions, e.g.NaCl) and the temperature inside the script.
+"""
+
+#feel free to change 
+concentration=0.100 #molar ionic strength | concentration of the salt [M/dm**3]
+T=298               #temperature [K]
+
+#shouldn't be changed
+er=78.4             #relative permittivity of the medium
+delta=0.002         #sampling of the table [nm]
+potcut=1e-3         #where cut the electrostatic potential
+R=0.2               #hard sphere radius [nm]
+e=1.602176565e-19   #elementary charge [C]
+kB=1.38064852e-23   #Bolzmann constant
+NA=6.02214076e23    #Avogadro's constant
+e0=8.8541878128e-12 #permitivity of the vacuum [F/m]
+kappa=((2*NA*e*e*concentration*1000)/(e0*er*kB*T))**0.5   #why 1000? molarity is related to 1 dm**3
+kappa=kappa*1e-9   #to nm**(-1) #inverse Debye screening length
+
+#find where cut the potential
+r=R
+while True:
+       pref=math.exp(-kappa*(r-(R+R)))/((1+kappa*R)*(1+kappa*R))   
+       pot0=pref/(er*r)
+       if pot0<potcut: break
+       r=r+delta
+r=math.ceil(r*10)/10.0   #get a "round" number
+
+rcut=r
+if rcut<1.4: rcut=1.4  #for Lennard-Jones should not be less
+nbins=int( (rcut+1)/delta) + 2  #number of bins in the table to have GROMACS happy
+
+#recalculate potential shift for the "round" value of the cutoff
+pref=math.exp(-kappa*(rcut-(R+R)))/((1+kappa*R)*(1+kappa*R))
+pot0=pref/(er*rcut)
+
+
+out=open('table.xvg','w')
+for j in range(nbins):
+    r=delta*j
+    if (r>=R)and(r<=rcut):  
+       pref=math.exp(-kappa*(r-(R+R)))/((1+kappa*R)*(1+kappa*R))
+       grad=-kappa*pref/(er*r) - pref/(er*r**2)
+       pot=pref/(er*r)   - pot0
+       out.write("%12.10e   %12.10e %12.10e   %12.10e %12.10e   %12.10e %12.10e\n" %( r, pot, -grad , -1.0/(r**6),-6.0/(r**7), 1.0/(r**12), 12.0/(r**13)))
+    else:   #non-physical proximity of particles or too large distance
+       out.write("%12.10e   %12.10e %12.10e   %12.10e %12.10e   %12.10e %12.10e\n" %( r, 0, 0 , 0,0,0,0))
+out.close()
+
+print ('Salt concentration | Ionic strength %f [M]'%concentration)
+print ('Debye length %f [nm]'%(1.0/kappa))
+print ('Use cutoff %f for electrostatics'%rcut)
+
